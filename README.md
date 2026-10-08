@@ -4,7 +4,7 @@ Sistema web de gestão para uma empresa que vende cursos com equipe de vendedore
 
 > 🧪 **Esta é a versão de demonstração.** Todos os dados são fictícios e ficam apenas na memória do navegador (recarregar a página reinicia tudo). Nenhuma informação é enviada a servidor algum.
 
-**🔗 Demo online:** `COLE-AQUI-O-LINK-DO-GITHUB-PAGES`
+**🔗 Demo online:** `https://natyqueiroz.github.io/EnsinaBook-Painel-admnistrativo/`
 **🔑 Login de visitante:** usuário `demo` · senha `demo`
 
 ## O que o sistema faz
