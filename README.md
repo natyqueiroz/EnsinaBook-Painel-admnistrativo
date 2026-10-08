@@ -24,12 +24,6 @@ Sistema web de gestão para uma empresa que vende cursos com equipe de vendedore
 - **Back-end da versão real:** Node.js, Express, SQLite (better-sqlite3), autenticação com JWT e bcrypt, upload de arquivos com multer, publicado em um VPS com PM2.
 - **Nesta demo:** o servidor é substituído por uma API simulada dentro do próprio `index.html` (intercepta as chamadas `fetch('/api/...')`), o que permite publicar no GitHub Pages.
 
-## Como rodar
-
-Basta abrir o `index.html` no navegador, ou publicar no GitHub Pages:
-
-1. Envie o `index.html` e este `README.md` para um repositório.
-2. Em **Settings → Pages**, escolha a branch `main` (pasta `/root`) e salve.
 
 ## Autoria
 
