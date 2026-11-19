@@ -3242,7 +3242,7 @@
       doc.setDrawColor.apply(doc, DOURADO);
       doc.setLineWidth(0.45); doc.line(0, 53, W, 53);
       doc.setLineWidth(0.2); doc.line(0, 54.8, W, 54.8);
-      doc.setFillColor.apply(doc, DOURADO); doc.roundedRect(W / 2 - 14.5, 7.5, 29, 29, 4, 4, 'F');
+      doc.setFillColor.apply(doc, DOURADO); doc.circle(W / 2, 22, 14.2, 'F');
       try { doc.addImage(LOGO_ENSINA_BOOK, 'PNG', W / 2 - 13, 9, 26, 26); } catch (e) { /* segue sem a logo */ }
       doc.setFont('times', 'normal'); doc.setFontSize(9); doc.setTextColor.apply(doc, DOURADO);
       doc.text('E N S I N A   B O O K', W / 2, 43, { align: 'center' });
