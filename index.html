@@ -3125,15 +3125,27 @@
     // PROTOCOLO DE CANCELAMENTO (PDF)
     // Gera um PDF com o protocolo pra enviar ao cliente,
     // registrando a data em que o cancelamento será feito.
-    // O número do protocolo sempre começa com "TF" e fica salvo
-    // no registro, pra sair igual se o PDF for gerado de novo.
+    // O número do protocolo começa com as iniciais do vendedor
+    // (ex.: Thiago Ferreira -> "TF-2026-123456") e fica salvo no
+    // registro, pra sair igual se o PDF for gerado de novo.
     // ======================================================
     let protocoloEmEdicao = null; // { item, venda }
 
-    function gerarNumeroProtocolo() {
+    // Iniciais do vendedor: primeira letra do primeiro e do último nome
+    function iniciaisVendedor(nome) {
+      const partes = String(nome || '')
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^A-Za-z\s]/g, ' ').trim().split(/\s+/).filter(Boolean);
+      if (!partes.length) return '';
+      if (partes.length === 1) return partes[0].slice(0, 2).toUpperCase();
+      return (partes[0][0] + partes[partes.length - 1][0]).toUpperCase();
+    }
+
+    function gerarNumeroProtocolo(nomeVendedor) {
       const ano = new Date().getFullYear();
       const aleatorio = Math.floor(100000 + Math.random() * 900000);
-      return 'TF-' + ano + '-' + aleatorio;
+      const iniciais = iniciaisVendedor(nomeVendedor) || 'XX';
+      return iniciais + '-' + ano + '-' + aleatorio;
     }
 
     function hojeIso() {
@@ -3163,9 +3175,12 @@
             dataPrevista = dataParaIso(somarDiasUteis(item.dataInformadoCliente, PRAZO_DIAS_UTEIS[item.setor]));
           }
 
+          const nomeVendedor = venda.vendedor || item.vendedor || '';
+          protocoloEmEdicao.vendedor = nomeVendedor;
           document.getElementById('mp-resumo').textContent =
-            (item.clienteNome || 'Cliente') + ' · Contrato nº ' + (item.numeroContrato || '—');
-          document.getElementById('mp-numero').value = item.protocoloNumero || gerarNumeroProtocolo();
+            (item.clienteNome || 'Cliente') + ' · Contrato nº ' + (item.numeroContrato || '—') +
+            ' · Vendedor: ' + (nomeVendedor || 'não encontrado');
+          document.getElementById('mp-numero').value = item.protocoloNumero || gerarNumeroProtocolo(nomeVendedor);
           document.getElementById('mp-cpf').value = item.clienteCpf || venda.clienteCpf || '';
           document.getElementById('mp-data-solicitacao').value = item.dataPedidoCancelamento || '';
           document.getElementById('mp-data-prevista').value = dataPrevista;
@@ -3197,8 +3212,7 @@
         document.getElementById('mp-data-prevista').focus();
         return;
       }
-      if (!numero) numero = gerarNumeroProtocolo();
-      if (numero.indexOf('TF') !== 0) numero = 'TF-' + numero.replace(/^-+/, '');
+      if (!numero) numero = gerarNumeroProtocolo(protocoloEmEdicao.vendedor);
 
       const item = protocoloEmEdicao.item;
       const dados = {
