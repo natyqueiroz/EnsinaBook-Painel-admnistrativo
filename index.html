@@ -1216,6 +1216,20 @@
       padding: 10px 12px;
     }
   }
+
+  /* ===== Modal do Protocolo de Cancelamento ===== */
+  .modal-protocolo {
+    position: fixed; inset: 0; z-index: 1000;
+    background: rgba(17, 17, 17, 0.55);
+    display: flex; align-items: center; justify-content: center; padding: 16px;
+  }
+  .modal-protocolo__caixa {
+    background: var(--card-bg); border-radius: 12px; width: 100%; max-width: 560px;
+    padding: 24px; border-top: 5px solid var(--accent);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+  }
+  .modal-protocolo__caixa h3 { margin: 0 0 4px; }
+  .modal-protocolo__sub { margin: 0 0 16px; color: var(--text-muted); font-size: 0.85rem; }
 </style>
 </head>
 <!-- Bibliotecas usadas só pelo botão "Exportar PDF" do Relatório.
@@ -2051,6 +2065,37 @@
       <div class="events-grid" id="eventos-grid">
       </div>
     </section>
+
+  <!-- ===== MODAL: PROTOCOLO DE CANCELAMENTO ===== -->
+  <div id="modal-protocolo" class="modal-protocolo" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="modal-protocolo-titulo">
+    <div class="modal-protocolo__caixa">
+      <h3 id="modal-protocolo-titulo">Protocolo de Cancelamento</h3>
+      <p class="modal-protocolo__sub" id="mp-resumo"></p>
+      <div class="form-grid">
+        <div class="form-field">
+          <label for="mp-numero">Nº do Protocolo</label>
+          <input type="text" id="mp-numero">
+        </div>
+        <div class="form-field">
+          <label for="mp-cpf">CPF do Cliente</label>
+          <input type="text" id="mp-cpf" placeholder="000.000.000-00">
+        </div>
+        <div class="form-field">
+          <label for="mp-data-solicitacao">Data da Solicitação</label>
+          <input type="date" id="mp-data-solicitacao">
+        </div>
+        <div class="form-field">
+          <label for="mp-data-prevista">Data Prevista para o Cancelamento</label>
+          <input type="date" id="mp-data-prevista">
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn-primary" type="button" id="mp-cancelar" style="background-color:var(--text-muted);">Cancelar</button>
+        <button class="btn-primary btn-accent" type="button" id="mp-gerar">Gerar PDF</button>
+      </div>
+    </div>
+  </div>
+
 
   </main>
 
@@ -3069,9 +3114,209 @@
         '<td>' +
           '<a href="#" class="action-link" data-edit>Editar</a>' +
           '<a href="#" class="action-link" data-finalizar>Finalizar</a>' +
+          '<a href="#" class="action-link" data-protocolo>Protocolo</a>' +
           '<a href="#" class="action-link" data-remove>Remover</a>' +
         '</td>';
       tbody.appendChild(row);
+    }
+
+
+    // ======================================================
+    // PROTOCOLO DE CANCELAMENTO (PDF)
+    // Gera um PDF com o protocolo pra enviar ao cliente,
+    // registrando a data em que o cancelamento será feito.
+    // O número do protocolo sempre começa com "TF" e fica salvo
+    // no registro, pra sair igual se o PDF for gerado de novo.
+    // ======================================================
+    let protocoloEmEdicao = null; // { item, venda }
+
+    function gerarNumeroProtocolo() {
+      const ano = new Date().getFullYear();
+      const aleatorio = Math.floor(100000 + Math.random() * 900000);
+      return 'TF-' + ano + '-' + aleatorio;
+    }
+
+    function hojeIso() {
+      const d = new Date();
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+
+    function dataParaIso(data) {
+      return data.getFullYear() + '-' + String(data.getMonth() + 1).padStart(2, '0') + '-' + String(data.getDate()).padStart(2, '0');
+    }
+
+    function abrirModalProtocolo(idCancelamento) {
+      Promise.all([
+        apiFetch('/cancelamentos/' + idCancelamento).then(function (r) { return r.json(); }),
+        apiFetch('/vendas').then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; })
+      ])
+        .then(function (resultado) {
+          const item = resultado[0];
+          const venda = (resultado[1] || []).find(function (v) {
+            return String(v.numeroContrato) === String(item.numeroContrato);
+          }) || {};
+          protocoloEmEdicao = { item: item, venda: venda };
+
+          // Sugere a data prevista: a já salva, ou o fim do prazo do setor
+          let dataPrevista = item.protocoloDataPrevista || '';
+          if (!dataPrevista && PRAZO_DIAS_UTEIS.hasOwnProperty(item.setor) && item.dataInformadoCliente) {
+            dataPrevista = dataParaIso(somarDiasUteis(item.dataInformadoCliente, PRAZO_DIAS_UTEIS[item.setor]));
+          }
+
+          document.getElementById('mp-resumo').textContent =
+            (item.clienteNome || 'Cliente') + ' · Contrato nº ' + (item.numeroContrato || '—');
+          document.getElementById('mp-numero').value = item.protocoloNumero || gerarNumeroProtocolo();
+          document.getElementById('mp-cpf').value = item.clienteCpf || venda.clienteCpf || '';
+          document.getElementById('mp-data-solicitacao').value = item.dataPedidoCancelamento || '';
+          document.getElementById('mp-data-prevista').value = dataPrevista;
+          document.getElementById('modal-protocolo').style.display = 'flex';
+          document.getElementById('mp-data-prevista').focus();
+        })
+        .catch(function () { alert('Não foi possível carregar os dados deste cancelamento.'); });
+    }
+
+    function fecharModalProtocolo() {
+      document.getElementById('modal-protocolo').style.display = 'none';
+      protocoloEmEdicao = null;
+    }
+
+    document.getElementById('mp-cancelar').addEventListener('click', fecharModalProtocolo);
+    document.getElementById('modal-protocolo').addEventListener('click', function (e) {
+      if (e.target.id === 'modal-protocolo') fecharModalProtocolo();
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && document.getElementById('modal-protocolo').style.display === 'flex') fecharModalProtocolo();
+    });
+
+    document.getElementById('mp-gerar').addEventListener('click', function () {
+      if (!protocoloEmEdicao) return;
+      let numero = document.getElementById('mp-numero').value.trim().toUpperCase();
+      const dataPrevista = document.getElementById('mp-data-prevista').value;
+      if (!dataPrevista) {
+        alert('Informe a data prevista para o cancelamento.');
+        document.getElementById('mp-data-prevista').focus();
+        return;
+      }
+      if (!numero) numero = gerarNumeroProtocolo();
+      if (numero.indexOf('TF') !== 0) numero = 'TF-' + numero.replace(/^-+/, '');
+
+      const item = protocoloEmEdicao.item;
+      const dados = {
+        numero: numero,
+        cliente: item.clienteNome || '',
+        cpf: document.getElementById('mp-cpf').value.trim(),
+        contrato: item.numeroContrato || '',
+        dataSolicitacao: document.getElementById('mp-data-solicitacao').value,
+        dataPrevista: dataPrevista
+      };
+
+      if (!gerarPdfProtocolo(dados)) return;
+
+      // Guarda o número e a data no registro, pra reaproveitar depois
+      item.protocoloNumero = numero;
+      item.protocoloDataPrevista = dataPrevista;
+      apiFetch('/cancelamentos/' + item.id, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(item)
+      }).catch(function () { console.error('Falha ao salvar o protocolo no cancelamento ' + item.id); });
+
+      fecharModalProtocolo();
+    });
+
+    function gerarPdfProtocolo(d) {
+      if (typeof window.jspdf === 'undefined') {
+        alert('Não foi possível carregar a biblioteca de PDF. Verifique sua conexão com a internet e tente novamente.');
+        return false;
+      }
+      const doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' });
+      const W = 210, H = 297;
+      const PRETO = [28, 27, 25], DOURADO = [201, 162, 39], DOURADO_CLARO = [246, 237, 207];
+      const CREME = [251, 248, 241], CINZA = [107, 103, 96], CAMPO = [245, 242, 234];
+
+      // Fundo creme
+      doc.setFillColor.apply(doc, CREME); doc.rect(0, 0, W, H, 'F');
+
+      // Faixa preta do topo, com a logo centralizada
+      doc.setFillColor.apply(doc, PRETO); doc.rect(0, 0, W, 53, 'F');
+      doc.setDrawColor.apply(doc, DOURADO);
+      doc.setLineWidth(0.45); doc.line(0, 53, W, 53);
+      doc.setLineWidth(0.2); doc.line(0, 54.8, W, 54.8);
+      doc.setFillColor.apply(doc, DOURADO); doc.roundedRect(W / 2 - 14.5, 7.5, 29, 29, 4, 4, 'F');
+      try { doc.addImage(LOGO_ENSINA_BOOK, 'PNG', W / 2 - 13, 9, 26, 26); } catch (e) { /* segue sem a logo */ }
+      doc.setFont('times', 'normal'); doc.setFontSize(9); doc.setTextColor.apply(doc, DOURADO);
+      doc.text('E N S I N A   B O O K', W / 2, 43, { align: 'center' });
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(191, 185, 172);
+      doc.text('ATENDIMENTO AO CLIENTE', W / 2, 48, { align: 'center' });
+
+      // Título
+      doc.setFont('times', 'bold'); doc.setFontSize(24); doc.setTextColor.apply(doc, PRETO);
+      doc.text('Protocolo de Cancelamento', W / 2, 74, { align: 'center' });
+      doc.setDrawColor.apply(doc, DOURADO); doc.setLineWidth(0.35); doc.line(W / 2 - 11, 78.5, W / 2 + 11, 78.5);
+
+      // Cartão branco com os dados
+      const cx = 18, cw = W - 36, ctop = 87, ch = 92;
+      doc.setFillColor(233, 227, 212); doc.roundedRect(cx + 0.8, ctop + 1, cw, ch, 3.5, 3.5, 'F');
+      doc.setFillColor(255, 255, 255); doc.setDrawColor(228, 223, 211); doc.setLineWidth(0.3);
+      doc.roundedRect(cx, ctop, cw, ch, 3.5, 3.5, 'FD');
+      doc.setFillColor.apply(doc, DOURADO); doc.rect(cx + 1.2, ctop, cw - 2.4, 2, 'F');
+
+      const pad = 9, inner = cw - 2 * pad, metade = (inner - 6) / 2;
+      function campo(rotulo, valor, x, y, largura) {
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(7); doc.setTextColor.apply(doc, CINZA);
+        doc.text(rotulo.toUpperCase(), x, y);
+        doc.setFillColor.apply(doc, CAMPO); doc.roundedRect(x, y + 2, largura, 8.5, 1.2, 1.2, 'F');
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(10.5); doc.setTextColor.apply(doc, PRETO);
+        doc.text(String(valor || '—'), x + 3, y + 7.6);
+      }
+      let y = ctop + 12;
+      campo('Protocolo nº', d.numero, cx + pad, y, metade);
+      campo('Contrato nº', d.contrato, cx + pad + metade + 6, y, metade);
+      y += 19;
+      campo('Nome do cliente', d.cliente, cx + pad, y, inner);
+      y += 19;
+      campo('CPF', d.cpf, cx + pad, y, metade);
+      campo('Data da solicitação', formatarDataBR(d.dataSolicitacao), cx + pad + metade + 6, y, metade);
+      y += 18;
+
+      // Destaque dourado: data prevista para o cancelamento
+      doc.setFillColor.apply(doc, DOURADO_CLARO); doc.roundedRect(cx + pad - 3, y, inner + 6, 20, 2.5, 2.5, 'F');
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(138, 109, 18);
+      doc.text('DATA PREVISTA PARA O CANCELAMENTO', cx + pad, y + 5.5);
+      doc.setFillColor(255, 255, 255); doc.roundedRect(cx + pad, y + 8, inner, 9.5, 1.5, 1.5, 'F');
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor.apply(doc, PRETO);
+      doc.text(formatarDataBR(d.dataPrevista), cx + pad + 3, y + 15);
+
+      // Mensagem
+      let ty = ctop + ch + 14;
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(10.5); doc.setTextColor.apply(doc, PRETO);
+      const texto = 'Informamos que a sua solicitação de cancelamento foi registrada com sucesso e será efetivada ' +
+        'na data indicada acima. Assim que o cancelamento for concluído, enviaremos o comprovante pelos nossos canais de atendimento.';
+      const linhas = doc.splitTextToSize(texto, W - 50);
+      doc.text(linhas, W / 2, ty, { align: 'center', lineHeightFactor: 1.5 });
+      ty += linhas.length * 5.6 + 5;
+      doc.setFont('helvetica', 'italic'); doc.setFontSize(9.5); doc.setTextColor.apply(doc, CINZA);
+      doc.text('Guarde este número de protocolo para eventuais consultas.', W / 2, ty, { align: 'center' });
+
+      ty += 16;
+      doc.setFont('times', 'italic'); doc.setFontSize(12); doc.setTextColor.apply(doc, PRETO);
+      doc.text('Atenciosamente,', W / 2, ty, { align: 'center' });
+      ty += 6;
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5);
+      doc.text('Equipe de Atendimento – Ensina Book', W / 2, ty, { align: 'center' });
+      ty += 12;
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor.apply(doc, CINZA);
+      doc.text('Emitido em: ' + formatarDataBR(hojeIso()), W / 2, ty, { align: 'center' });
+
+      // Rodapé
+      doc.setFillColor.apply(doc, PRETO); doc.rect(0, H - 14, W, 14, 'F');
+      doc.setDrawColor.apply(doc, DOURADO); doc.setLineWidth(0.35); doc.line(0, H - 14, W, H - 14);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(217, 211, 197);
+      doc.text('Atendimento via WhatsApp  •  (11) 91660-2666', W / 2, H - 5.5, { align: 'center' });
+
+      const nomeArquivo = 'Protocolo_' + d.numero + '_' + (d.cliente || 'cliente').trim().replace(/\s+/g, '_') + '.pdf';
+      doc.save(nomeArquivo);
+      return true;
     }
 
     function carregarCancelamentos() {
@@ -4709,7 +4954,14 @@
         return;
       }
 
-      // -------- VER ANEXO (Carta Acordo) --------
+      // -------- PROTOCOLO DE CANCELAMENTO (PDF) --------
+      if (event.target.hasAttribute('data-protocolo')) {
+        event.preventDefault();
+        abrirModalProtocolo(id);
+        return;
+      }
+
+            // -------- VER ANEXO (Carta Acordo) --------
       if (event.target.hasAttribute('data-ver-anexo')) {
         event.preventDefault();
         abrirAnexoCartaAcordo(id);
